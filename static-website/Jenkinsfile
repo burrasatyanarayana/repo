@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Clone the repository
+                git 'https://github.com/your-username/your-repo.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                // Build the project
+                sh './gradlew build' // Adjust the build command as per your project
+            }
+        }
+        stage('Test') {
+            steps {
+                // Run tests
+                sh './gradlew test' // Adjust the test command as per your project
+            }
+        }
+        stage('Deploy') {
+            steps {
+                // Deploy the application
+                sh 'echo "Deploying the application..."'
+                // Add deployment steps here
+            }
+        }
+    }
+}
+
