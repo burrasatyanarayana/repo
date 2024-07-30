@@ -1,9 +1,7 @@
 version: '3'
 services:
   web:
+    image: static-website
     build: .
     ports:
       - "80:80"
-    volumes:
-      - .:/usr/share/nginx/html
-[I
