@@ -1,62 +1,62 @@
-node('linux') { // Runs on a Linux agent
-    try {
-        stage('Update System') {
-            echo 'Updating system packages...'
-            sh '''
-            sudo apt-get update -y
-            '''
+pipeline {
+    agent 'linux' // Use any available agent for this pipeline
+
+    environment {
+        DOCKER_IMAGE_NAME = "my-app" // Name of the Docker image
+        DOCKER_TAG = "latest"        // Tag for the image
+        DOCKER_PORT = "8082"         // Port to run the container on
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout your repository (ensure the necessary files are pulled)
+                echo 'Checking out the repository...'
+                checkout scm
+            }
         }
-        
-        stage('Install Docker Dependencies') {
-            echo 'Installing Docker dependencies...'
-            sh '''
-            sudo apt-get install -y \
-                apt-transport-https \
-                ca-certificates \
-                curl \
-                software-properties-common
-            '''
+
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
+                script {
+                    // Build the Docker image using the Dockerfile
+                    sh """
+                        docker build -t ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} .
+                    """
+                }
+            }
         }
-        
-        stage('Add Docker GPG Key') {
-            echo 'Adding Docker GPG key...'
-            sh '''
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            '''
+
+        stage('Run Docker Container') {
+            steps {
+                echo 'Running Docker container on port 8082...'
+                script {
+                    // Run the Docker container on port 8082, mapping host port 8082 to container port 8082
+                    sh """
+                        docker run -d -p ${DOCKER_PORT}:${DOCKER_PORT} --name ${DOCKER_IMAGE_NAME}_container ${DOCKER_IMAGE_NAME}:${DOCKER_TAG}
+                    """
+                }
+            }
         }
-        
-        stage('Set up Docker Repository') {
-            echo 'Setting up Docker repository...'
-            sh '''
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-            '''
+
+        stage('Verify Docker Container') {
+            steps {
+                echo 'Verifying if Docker container is running...'
+                script {
+                    // Check if the container is running
+                    sh 'docker ps -a'
+                }
+            }
         }
-        
-        stage('Install Docker') {
-            echo 'Installing Docker...'
-            sh '''
-            sudo apt-get update -y
-            sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-            '''
+    }
+
+    post {
+        success {
+            echo 'Docker container successfully built and running on port 8082. You can access the website at http://<your-jenkins-agent-ip>:8082'
         }
-        
-        stage('Verify Docker Installation') {
-            echo 'Verifying Docker installation...'
-            sh '''
-            docker --version
-            '''
+        failure {
+            echo 'An error occurred during the build or container startup.'
         }
-        
-        stage('Add Jenkins User to Docker Group') {
-            echo 'Adding Jenkins user to the Docker group...'
-            sh '''
-            sudo usermod -aG docker $USER
-            '''
-        }
-        
-        echo 'Docker has been installed successfully!'
-    } catch (Exception e) {
-        echo "An error occurred: ${e.getMessage()}"
-        currentBuild.result = 'FAILURE'
     }
 }
