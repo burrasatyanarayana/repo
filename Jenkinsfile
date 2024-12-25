@@ -1,62 +1,75 @@
 pipeline {
-    agent 'linux' // Use any available agent for this pipeline
-
-    environment {
-        DOCKER_IMAGE_NAME = "my-app" // Name of the Docker image
-        DOCKER_TAG = "latest"        // Tag for the image
-        DOCKER_PORT = "8082"         // Port to run the container on
-    }
-
+    agent { label 'linux' } // Ensure your Linux agent is labeled 'linux'
+    
     stages {
-        stage('Checkout') {
+        stage('Update System') {
             steps {
-                // Checkout your repository (ensure the necessary files are pulled)
-                echo 'Checking out the repository...'
-                checkout scm
+                echo 'Updating system packages...'
+                sh '''
+                    sudo apt-get update -y
+                '''
             }
         }
-
-        stage('Build Docker Image') {
+        stage('Install Docker Dependencies') {
             steps {
-                echo 'Building Docker image...'
-                script {
-                    // Build the Docker image using the Dockerfile
-                    sh """
-                        docker build -t ${DOCKER_IMAGE_NAME}:${DOCKER_TAG} .
-                    """
-                }
+                echo 'Installing Docker dependencies...'
+                sh '''
+                    sudo apt-get install -y \
+                        apt-transport-https \
+                        ca-certificates \
+                        curl \
+                        software-properties-common
+                '''
             }
         }
-
-        stage('Run Docker Container') {
+        stage('Add Docker GPG Key') {
             steps {
-                echo 'Running Docker container on port 8082...'
-                script {
-                    // Run the Docker container on port 8082, mapping host port 8082 to container port 8082
-                    sh """
-                        docker run -d -p ${DOCKER_PORT}:${DOCKER_PORT} --name ${DOCKER_IMAGE_NAME}_container ${DOCKER_IMAGE_NAME}:${DOCKER_TAG}
-                    """
-                }
+                echo 'Adding Docker GPG key...'
+                sh '''
+                    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                '''
             }
         }
-
-        stage('Verify Docker Container') {
+        stage('Set up Docker Repository') {
             steps {
-                echo 'Verifying if Docker container is running...'
-                script {
-                    // Check if the container is running
-                    sh 'docker ps -a'
-                }
+                echo 'Setting up Docker repository...'
+                sh '''
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                '''
+            }
+        }
+        stage('Install Docker') {
+            steps {
+                echo 'Installing Docker...'
+                sh '''
+                    sudo apt-get update -y
+                    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+                '''
+            }
+        }
+        stage('Verify Docker Installation') {
+            steps {
+                echo 'Verifying Docker installation...'
+                sh '''
+                    docker --version
+                '''
+            }
+        }
+        stage('Add Jenkins User to Docker Group') {
+            steps {
+                echo 'Adding Jenkins user to the Docker group...'
+                sh '''
+                    sudo usermod -aG docker $USER
+                '''
             }
         }
     }
-
     post {
         success {
-            echo 'Docker container successfully built and running on port 8082. You can access the website at http://<your-jenkins-agent-ip>:8082'
+            echo 'Docker has been installed successfully!'
         }
         failure {
-            echo 'An error occurred during the build or container startup.'
+            echo 'An error occurred during the pipeline execution.'
         }
     }
 }
