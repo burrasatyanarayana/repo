@@ -1,48 +1,62 @@
-pipeline {
-    agent any
-
-    environment {
-        // Docker image and container details
-        DOCKER_IMAGE = "web-app-example:latest" // Change "web-app-example" to your desired name
-        CONTAINER_NAME = "web-app-container"
-    }
-
-    stages {
-        stage('Clone Repository') {
-            steps {
-                // Print repository details
-                echo 'Cloning repository from SCM...'
-            }
+node('linux') { // Runs on a Linux agent
+    try {
+        stage('Update System') {
+            echo 'Updating system packages...'
+            sh '''
+            sudo apt-get update -y
+            '''
         }
-
-        stage('Build Docker Image') {
-            steps {
-                // Build the Docker image using Dockerfile in the repo
-                sh 'docker build -t $DOCKER_IMAGE .'
-            }
+        
+        stage('Install Docker Dependencies') {
+            echo 'Installing Docker dependencies...'
+            sh '''
+            sudo apt-get install -y \
+                apt-transport-https \
+                ca-certificates \
+                curl \
+                software-properties-common
+            '''
         }
-
-        stage('Remove Existing Container') {
-            steps {
-                // Stop and remove any existing container with the same name
-                sh '''
-                docker ps -q --filter "name=$CONTAINER_NAME" | grep -q . && docker stop $CONTAINER_NAME || true
-                docker ps -a -q --filter "name=$CONTAINER_NAME" | grep -q . && docker rm $CONTAINER_NAME || true
-                '''
-            }
+        
+        stage('Add Docker GPG Key') {
+            echo 'Adding Docker GPG key...'
+            sh '''
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            '''
         }
-
-        stage('Run Docker Container') {
-            steps {
-                // Run the container and expose it on port 8000
-                sh 'docker run -d --name $CONTAINER_NAME -p 8000:80 $DOCKER_IMAGE'
-            }
+        
+        stage('Set up Docker Repository') {
+            echo 'Setting up Docker repository...'
+            sh '''
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            '''
         }
-    }
-
-    post {
-        always {
-            echo 'Pipeline completed. Check the application on port 8000.'
+        
+        stage('Install Docker') {
+            echo 'Installing Docker...'
+            sh '''
+            sudo apt-get update -y
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+            '''
         }
+        
+        stage('Verify Docker Installation') {
+            echo 'Verifying Docker installation...'
+            sh '''
+            docker --version
+            '''
+        }
+        
+        stage('Add Jenkins User to Docker Group') {
+            echo 'Adding Jenkins user to the Docker group...'
+            sh '''
+            sudo usermod -aG docker $USER
+            '''
+        }
+        
+        echo 'Docker has been installed successfully!'
+    } catch (Exception e) {
+        echo "An error occurred: ${e.getMessage()}"
+        currentBuild.result = 'FAILURE'
     }
 }
